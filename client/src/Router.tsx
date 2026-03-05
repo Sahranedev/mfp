@@ -1,7 +1,6 @@
 import { Navigate, Routes, Route } from "react-router";
 import { HomePage } from "./pages/Home";
 import { useEffect, useState } from "react";
-import axios from "axios";
 import { SigninPage } from "./pages/Signin";
 import { SignupPage } from "./pages/Signup";
 import { DashboardPage } from "./pages/Dashboard";
@@ -23,16 +22,26 @@ export function Router() {
 
   useEffect(() => {
     async function getUser() {
-      const { data } = await axios.get("/api/users/me", {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
-
-      if (data?.item?.id) {
-        sessionStorage.setItem("user", data?.item);
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          setReady(true);
+          return;
+        }
+        const response = await fetch("/api/users/me", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data?.item?.id) {
+            sessionStorage.setItem("user", data?.item);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching user:", err);
       }
-
       setReady(true);
     }
     if (localStorage.getItem("token")) {
