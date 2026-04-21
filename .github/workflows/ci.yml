@@ -1,8 +1,6 @@
-name: CI Pipeline
+name: CI
 
-# Permissions minimales déclarées au niveau du workflow
-permissions:
-  contents: read
+run-name: ${{ github.actor }} — build images & tests
 
 on:
   push:
@@ -14,59 +12,53 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  build-server:
-    name: Build API (TypeScript)
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: server
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/checkout@v4
 
-      - name: Installer Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - name: Image prefix (GHCR)
+        run: echo "IMAGE_PREFIX=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          file: ./server/dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.IMAGE_PREFIX }}/mfp-server:latest
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./client
+          file: ./client/dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.IMAGE_PREFIX }}/mfp-client:latest
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
+          cache: npm
           cache-dependency-path: server/package-lock.json
-
-      - name: Installer les dépendances
+      - name: Install dependencies
+        working-directory: server
         run: npm ci
-
-      - name: Compiler le TypeScript
-        run: npm run build
-
-  build-client:
-    name: Build Client (Vite + TypeScript)
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: client
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-
-      - name: Installer Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: "22"
-          cache: "npm"
-          cache-dependency-path: client/package-lock.json
-
-      - name: Installer les dépendances
-        run: npm ci
-
-      - name: Linter
-        run: npm run lint
-
-      - name: Compiler et builder
-        run: npm run build
-
-  build-docker:
-    name: Build images Docker
-    runs-on: ubuntu-24.04
-    needs: [build-server, build-client]
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-
-      - name: Build des images via Docker Compose
-        run: docker compose build
+      - name: Run tests
+        working-directory: server
+        run: npm test
