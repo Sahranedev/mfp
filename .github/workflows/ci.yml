@@ -38,14 +38,18 @@ jobs:
           context: ./server
           file: ./server/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.IMAGE_PREFIX }}/mfp-server:latest
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/mfp-server:latest
+            ${{ env.IMAGE_PREFIX }}/mfp-server:main
 
       - uses: docker/build-push-action@v5
         with:
           context: ./client
           file: ./client/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.IMAGE_PREFIX }}/mfp-client:latest
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/mfp-client:latest
+            ${{ env.IMAGE_PREFIX }}/mfp-client:main
 
   test:
     runs-on: ubuntu-latest
